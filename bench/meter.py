@@ -60,6 +60,7 @@ class Call:
     reasoning: int
     latency_s: float
     ok: bool = True
+    tools: list = field(default_factory=list)   # tool calls the model asked for (agent steps)
 
 
 @dataclass
@@ -69,10 +70,16 @@ class Scope:
     t_start: float = 0.0
     t_end: float = 0.0
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    on_call: Any = field(default=None, repr=False)   # optional callback(call), e.g. live chat demo
 
     def add(self, call: Call) -> None:
         with self._lock:
             self.calls.append(call)
+        if self.on_call is not None:
+            try:
+                self.on_call(call)
+            except Exception:
+                pass
 
     @property
     def wall_s(self) -> float:
@@ -98,6 +105,24 @@ class Scope:
         tot["cost_usd"] = round(tot["cost_usd"], 8)
         tot["llm_time_s"] = round(tot["llm_time_s"], 4)
         return tot
+
+
+def tool_calls(body: dict | None) -> list[dict]:
+    """Tool calls requested in a Chat Completions or Responses body: [{name, args}]."""
+    out: list[dict] = []
+    if not isinstance(body, dict):
+        return out
+    try:
+        for ch in body.get("choices") or []:
+            for tc in ((ch or {}).get("message") or {}).get("tool_calls") or []:
+                f = tc.get("function") or {}
+                out.append({"name": str(f.get("name", "?")), "args": str(f.get("arguments", ""))[:300]})
+        for it in body.get("output") or []:
+            if isinstance(it, dict) and it.get("type") == "function_call":
+                out.append({"name": str(it.get("name", "?")), "args": str(it.get("arguments", ""))[:300]})
+    except Exception:
+        pass
+    return out
 
 
 def _price_for(model: str, pricing: dict) -> dict:
@@ -171,7 +196,8 @@ class UsageMeter:
         u = parse_usage(body.get("usage"))
         if "_unknown" in _price_for(model, self.pricing):
             self.unknown_models.add(model)
-        call = Call(kind, model, u["input"], u["cached"], u["output"], u["reasoning"], latency, ok)
+        call = Call(kind, model, u["input"], u["cached"], u["output"], u["reasoning"], latency, ok,
+                    tool_calls(body))
         (_current.get() or self.unscoped).add(call)
         return call
 

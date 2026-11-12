@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "chat-demo-fake",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "bench.chat_app", "--fake", "--no-browser", "--port", "8766"],
+      "port": 8766
+    },
+    {
+      "name": "chat-demo",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "bench.chat_app", "--no-browser", "--port", "8767"],
+      "port": 8767
+    }
+  ]
+}

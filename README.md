@@ -86,6 +86,27 @@ python -m bench.langfuse_replay --dir results/modeled               # full model
 
 Dashboard widget spec: `docs/LANGFUSE_DASHBOARD.md`.
 
+## Side-by-side chat demo
+
+Ask a question in the browser and watch both pipelines answer it at the same time, with
+every OpenAI call (model, tokens, cached tokens, latency, cost, and the tools PageIndex's
+agent called) appearing live as it happens.
+
+```bash
+python -m bench.chat_app --fake                         # try the UI with simulated answers ($0)
+
+python -m bench.build_corpus --scale small --only labels  # 25 FDA labels (free, public API)
+python -m bench.run_benchmark index --limit 5             # index 5 docs in both pipelines
+python -m bench.chat_app                                  # http://127.0.0.1:8765
+```
+
+* Pick one document (document scope) or "Whole library" (corpus scope).
+* Same answering model, prompt and reasoning effort as the benchmark; same meter.
+* With Langfuse keys in `.env`, each answer is a trace in environment `demo`, linked from the UI.
+* Documents indexed here are reused by the full benchmark run (indexing is resumable).
+* The two pipelines run in parallel here, so latencies are a little noisier than in the
+  benchmark (which runs one at a time). Use the benchmark for numbers you report.
+
 ## Rehearse without running anything
 
 ```bash

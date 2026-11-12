@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG Side by Side</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e1e5eb;
+  --text: #16191f; --muted: #5d6673; --faint: #8a93a0;
+  --pi: #4f46e5; --pi-soft: #eef0ff; --vr: #0d8a7a; --vr-soft: #e6f6f3;
+  --warn: #b45309; --warn-soft: #fff6e6; --err: #c0262d; --err-soft: #fdeced;
+  --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #171a20; --surface-2: #1e222a; --border: #2a2f39;
+    --text: #e8eaee; --muted: #a3abb7; --faint: #7a8391;
+    --pi: #8b85ff; --pi-soft: #23224a; --vr: #3cc7b2; --vr-soft: #12302c;
+    --warn: #f0b35a; --warn-soft: #33270f; --err: #ff7b80; --err-soft: #3a1a1c;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #171a20; --surface-2: #1e222a; --border: #2a2f39;
+  --text: #e8eaee; --muted: #a3abb7; --faint: #7a8391;
+  --pi: #8b85ff; --pi-soft: #23224a; --vr: #3cc7b2; --vr-soft: #12302c;
+  --warn: #f0b35a; --warn-soft: #33270f; --err: #ff7b80; --err-soft: #3a1a1c;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
+a { color: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+
+/* header */
+header.top { position: relative; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+header.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding-top: 12px; padding-bottom: 12px; }
+.brand h1 { font-size: 17px; margin: 0; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--muted); font-size: 13px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; align-items: center; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); white-space: nowrap; text-decoration: none; }
+.chip b { color: var(--text); font-weight: 600; }
+.chip.ok::before, .chip.off::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.chip.ok::before { background: #22a06b; }
+.chip.off::before { background: var(--faint); }
+.chip.fake { background: var(--warn-soft); color: var(--warn); border-color: transparent; font-weight: 600; }
+.totals { display: flex; gap: 14px; font-size: 12px; color: var(--muted); width: 100%; }
+.totals span b { font-variant-numeric: tabular-nums; color: var(--text); }
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.sw.pi { background: var(--pi); } .sw.vr { background: var(--vr); }
+
+@media (min-height: 820px) and (min-width: 860px) { header.top { position: sticky; top: 0; } }
+
+/* setup banner */
+.notice { margin: 18px 0 0; padding: 14px 16px; border-radius: 10px; background: var(--warn-soft); color: var(--text); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); font-size: 14px; }
+.notice h2 { font-size: 14px; margin: 0 0 6px; color: var(--warn); }
+.notice code, .notice pre { font-family: var(--mono); font-size: 12.5px; }
+.notice pre { background: var(--surface); border: 1px solid var(--border); padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+.notice ol { margin: 6px 0 0; padding-left: 20px; }
+
+/* conversation */
+main { padding-bottom: var(--composer-h, 200px); }
+.empty { text-align: center; color: var(--muted); padding: 56px 0 24px; }
+.empty h2 { color: var(--text); font-size: 20px; margin: 0 0 6px; letter-spacing: -.01em; }
+.legend { display: inline-flex; gap: 18px; margin-top: 14px; font-size: 13px; text-align: left; }
+.legend div { max-width: 280px; }
+.turn { margin-top: 26px; }
+.qline { display: flex; gap: 10px; align-items: baseline; margin-bottom: 10px; }
+.qline .q { font-size: 16px; font-weight: 600; }
+.scope-tag { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 860px) { .pair { grid-template-columns: 1fr; } }
+
+.pane { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; border-top: 3px solid var(--accent); }
+.pane[data-p="pageindex"] { --accent: var(--pi); --accent-soft: var(--pi-soft); }
+.pane[data-p="vector_rag"] { --accent: var(--vr); --accent-soft: var(--vr-soft); }
+.pane > header { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 4px; }
+.pane h3 { margin: 0; font-size: 15px; color: var(--accent); }
+.pane .how { font-size: 12px; color: var(--faint); }
+.state { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.state.run::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1s infinite ease-in-out; }
+.state.err { color: var(--err); }
+@keyframes pulse { 50% { opacity: .25; } }
+
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border-block: 1px solid var(--border); margin-top: 8px; }
+.metric { background: var(--surface); padding: 8px 12px; min-width: 0; }
+.metric .k { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; }
+.metric .v { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric .s { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.metric.win .v::after { content: " ●"; font-size: 9px; color: var(--accent); vertical-align: 3px; }
+@media (max-width: 480px) { .metrics { grid-template-columns: repeat(2, 1fr); } }
+
+.answer { padding: 12px 14px; font-size: 14.5px; overflow-wrap: anywhere; }
+.answer p { margin: 0 0 8px; } .answer p:last-child { margin-bottom: 0; }
+.answer ul, .answer ol { margin: 0 0 8px; padding-left: 20px; }
+.answer code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+.cite { font-size: 11.5px; font-family: var(--mono); background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 0 4px; white-space: nowrap; }
+.answer .err { color: var(--err); background: var(--err-soft); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
+.skel { height: 10px; border-radius: 5px; background: var(--surface-2); margin: 8px 0; animation: pulse 1.4s infinite ease-in-out; }
+
+.sources { padding: 0 14px 10px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.sources .lbl { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.src { font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+
+details.log { border-top: 1px solid var(--border); font-size: 12.5px; }
+details.log summary { cursor: pointer; padding: 8px 14px; color: var(--muted); list-style: none; display: flex; gap: 8px; }
+details.log summary::-webkit-details-marker { display: none; }
+details.log summary::before { content: "▸"; color: var(--faint); transition: transform .15s; }
+details.log[open] summary::before { transform: rotate(90deg); }
+.log ol { list-style: none; margin: 0; padding: 0 14px 10px; max-height: 260px; overflow-y: auto; }
+.log li { padding: 5px 0; border-top: 1px dashed var(--border); font-variant-numeric: tabular-nums; animation: fadein .25s ease-out; }
+.log li:first-child { border-top: 0; }
+.log .n { display: inline-block; min-width: 22px; color: var(--faint); }
+.log .kind { font-weight: 600; color: var(--accent); }
+.log .tool { display: block; margin-left: 22px; font-family: var(--mono); font-size: 11.5px; color: var(--text); overflow-wrap: anywhere; }
+.log .tool::before { content: "→ "; color: var(--faint); }
+.log .bad { color: var(--err); }
+@keyframes fadein { from { opacity: 0; transform: translateY(-2px); } }
+
+.pane > footer { margin-top: auto; padding: 8px 14px 10px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.pane > footer a { color: var(--accent); text-decoration: none; margin-left: auto; }
+.pane > footer a:hover { text-decoration: underline; }
+
+.verdict { margin-top: 10px; font-size: 13px; color: var(--muted); background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 9px 14px; }
+.verdict b { color: var(--text); }
+
+/* composer */
+.composer { position: fixed; z-index: 6; left: 0; right: 0; bottom: 0; background: linear-gradient(to top, var(--bg) 78%, transparent); padding: 14px 0 12px; }
+.box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 4px 18px rgba(16,24,40,.08); padding: 10px; }
+.row { display: flex; gap: 8px; align-items: flex-end; }
+textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; min-height: 38px; max-height: 160px; padding: 7px 6px; }
+button.ask { border: 0; border-radius: 10px; background: var(--text); color: var(--surface); font: inherit; font-weight: 600; padding: 9px 16px; cursor: pointer; }
+button.ask:disabled { opacity: .45; cursor: default; }
+.under { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; padding: 6px 4px 0; border-top: 1px solid var(--border); }
+select { font: inherit; font-size: 13px; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; max-width: 100%; min-width: 0; }
+#examples { display: flex; gap: 6px; overflow-x: auto; flex: 1 1 260px; min-width: 0; scrollbar-width: none; }
+#examples::-webkit-scrollbar { display: none; }
+.ex { white-space: nowrap; flex: none; font-size: 12.5px; border: 1px dashed var(--border); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-family: inherit; }
+.ex:hover { color: var(--text); border-style: solid; }
+.hint { font-size: 11.5px; color: var(--faint); margin-left: auto; white-space: nowrap; }
+@media (max-width: 900px) { .hint { display: none; } }
+@media (max-width: 600px) { .under select { width: 100%; } .box { padding: 8px; } }
+@media (max-height: 700px) { body.has-turns #examples { display: none; } .composer { padding-top: 8px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <h1>PageIndex vs Vector RAG</h1>
+      <p>Same question, same answering model: live usage from both pipelines</p>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="totals" id="totals" hidden></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="setup"></div>
+  <div id="conv">
+    <div class="empty" id="empty">
+      <h2>Ask a clinical question</h2>
+      <div>Both pipelines answer at the same time. Watch each OpenAI call land as it happens.</div>
+      <div class="legend">
+        <div><span class="sw pi"></span><b>PageIndex</b>: an LLM agent walks the document's table-of-contents tree and reads the pages it picks. Several calls per question.</div>
+        <div><span class="sw vr"></span><b>Vector RAG</b>: embeds the question, takes the closest text chunks, and answers in one call.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<div class="composer">
+  <div class="wrap">
+    <div class="box">
+      <div class="row">
+        <textarea id="q" rows="1" placeholder="Ask a clinical question…"></textarea>
+        <button class="ask" id="ask">Ask both</button>
+      </div>
+      <div class="under">
+        <select id="scope" aria-label="Which documents to search"></select>
+        <span id="examples"></span>
+        <span class="hint">Enter to send · Shift+Enter for a new line</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PIPES = [
+  { id: "pageindex", name: "PageIndex", how: "tree search agent" },
+  { id: "vector_rag", name: "Vector RAG", how: "" },
+];
+const TYPE_LABEL = { trial_protocol: "Clinical trial protocols", fda_label: "FDA prescribing information", clinical_note: "Patient notes", other: "Other" };
+const EXAMPLES = {
+  "": ["Which documents describe a boxed warning, and for what risk?", "Which trials exclude patients with an eGFR below 30?"],
+  fda_label: ["What is the recommended starting dose, and how is it adjusted for renal impairment?", "List the warnings and precautions and the sections they refer to."],
+  trial_protocol: ["What are the key inclusion and exclusion criteria?", "What is the primary endpoint and when is it assessed?"],
+  clinical_note: ["What medications is the patient taking, and what are the allergies?", "What does the assessment and plan say?"],
+  other: ["Summarise the key points of this document."],
+};
+let STATUS = null, busy = false;
+const session = { pageindex: { n: 0, cost: 0, time: 0 }, vector_rag: { n: 0, cost: 0, time: 0 } };
+
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmtInt = n => (n ?? 0).toLocaleString("en-US");
+const fmtK = n => n >= 10000 ? (n / 1000).toFixed(n >= 100000 ? 0 : 1) + "k" : fmtInt(n);
+const fmtUsd = v => v == null ? "–" : v === 0 ? "$0" : v < 0.01 ? "$" + v.toFixed(4) : v < 1 ? "$" + v.toFixed(3) : "$" + v.toFixed(2);
+const fmtS = s => s == null ? "–" : s < 10 ? s.toFixed(1) + "s" : Math.round(s) + "s";
+
+function md(text) {
+  const lines = esc(text).split(/\n/);
+  let html = "", list = null;
+  const inline = s => s
+    .replace(/\[\[(\d+)\]\]\(#[^)\s]*\)/g, '<span class="cite">[$1]</span>')   // PageIndex citation links
+    .replace(/\[([^\]]+)\]\((?:#|https?:)[^)\s]*\)/g, "$1")                     // other markdown links: text only
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[([A-Za-z0-9_.\-]+ p\.\s?\d+(?:[-–]\d+)?)\]/g, '<span class="cite">$1</span>');
+  const close = () => { if (list) { html += `</${list}>`; list = null; } };
+  for (const raw of lines) {
+    const l = raw.trimEnd();
+    let m;
+    if ((m = l.match(/^\s*[-*•]\s+(.*)/))) { if (list !== "ul") { close(); html += "<ul>"; list = "ul"; } html += `<li>${inline(m[1])}</li>`; }
+    else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) { if (list !== "ol") { close(); html += "<ol>"; list = "ol"; } html += `<li>${inline(m[1])}</li>`; }
+    else if (!l.trim()) { close(); }
+    else { close(); html += `<p>${inline(l.replace(/^#+\s*/, ""))}</p>`; }
+  }
+  close();
+  return html || "<p><i>(empty answer)</i></p>";
+}
+
+// ------------------------------------------------------------------ status
+async function loadStatus() {
+  STATUS = await (await fetch("/api/status")).json();
+  const lf = STATUS.langfuse;
+  const chips = [];
+  if (STATUS.fake) chips.push(`<span class="chip fake">Simulated: no API calls</span>`);
+  chips.push(`<span class="chip">answer model <b>${esc(STATUS.models.chat)}</b>${STATUS.models.reasoning_effort ? " · " + esc(STATUS.models.reasoning_effort) : ""}</span>`);
+  chips.push(lf.on
+    ? `<a class="chip ok" href="${esc(lf.base_url)}" target="_blank" rel="noopener">Langfuse <b>on</b> · env demo</a>`
+    : `<span class="chip off">Langfuse off</span>`);
+  $("#chips").innerHTML = chips.join("");
+
+  const sel = $("#scope"), docs = STATUS.docs;
+  const both = docs.filter(d => d.indexed.pageindex && d.indexed.vector_rag);
+  let opts = `<option value="">Whole library (${both.length} document${both.length === 1 ? "" : "s"})</option>`;
+  const groups = {};
+  for (const d of docs) (groups[d.doc_type] ??= []).push(d);
+  for (const [t, ds] of Object.entries(groups)) {
+    opts += `<optgroup label="${esc(TYPE_LABEL[t] || t)}">`;
+    for (const d of ds) {
+      const ok = d.indexed.pageindex && d.indexed.vector_rag;
+      const miss = ok ? "" : ` (only ${d.indexed.pageindex ? "PageIndex" : "Vector RAG"})`;
+      const title = d.title.length > 70 ? d.title.slice(0, 68) + "…" : d.title;
+      opts += `<option value="${esc(d.doc_id)}" ${ok ? "" : "disabled"}>${esc(d.doc_id)} · ${esc(title)}${d.pages ? " · " + d.pages + " p" : ""}${miss}</option>`;
+    }
+    opts += "</optgroup>";
+  }
+  sel.innerHTML = opts;
+  if (both.length) sel.value = both[0].doc_id;
+  renderExamples();
+  renderSetup(both.length);
+}
+
+function renderSetup(nBoth) {
+  const p = STATUS.pipelines, notes = [];
+  for (const x of PIPES) if (!p[x.id].ready) notes.push(`<li><b>${x.name}</b> could not start: <code>${esc(p[x.id].error)}</code></li>`);
+  const onlyOne = STATUS.docs.length - nBoth;
+  let html = "";
+  if (!nBoth && !STATUS.fake) {
+    html = `<div class="notice"><h2>No documents indexed by both pipelines yet</h2>
+      Build a small corpus and index a few documents (a few minutes; PageIndex indexing costs roughly $0.05 per 40-page label):
+      <pre>python -m bench.build_corpus --scale small --only labels
+python -m bench.run_benchmark index --limit 5</pre>
+      Then restart this app. Or try the interface with simulated answers: <code>python -m bench.chat_app --fake</code>
+      ${notes.length ? `<ol>${notes.join("")}</ol>` : ""}</div>`;
+  } else if (notes.length || onlyOne) {
+    html = `<div class="notice"><h2>Heads up</h2><ol>${notes.join("")}${onlyOne ? `<li>${onlyOne} document(s) are indexed by only one pipeline. They are disabled in the picker, and whole-library answers are not a fair comparison until both indexes match.</li>` : ""}</ol></div>`;
+  }
+  $("#setup").innerHTML = html;
+  $("#ask").disabled = !nBoth && !STATUS.fake;
+}
+
+function currentType() {
+  const id = $("#scope").value;
+  if (!id) return "";
+  return (STATUS.docs.find(d => d.doc_id === id) || {}).doc_type || "other";
+}
+function renderExamples() {
+  $("#examples").innerHTML = (EXAMPLES[currentType()] || []).map(e => `<button class="ex" type="button">${esc(e)}</button>`).join(" ");
+}
+
+// ------------------------------------------------------------------ turns
+function newTurn(question, docId) {
+  $("#empty")?.remove();
+  document.body.classList.add("has-turns");
+  const scopeLabel = docId ? docId : "Whole library";
+  const sec = document.createElement("section");
+  sec.className = "turn";
+  sec.innerHTML = `<div class="qline"><span class="scope-tag">${esc(scopeLabel)}</span><span class="q">${esc(question)}</span></div>
+    <div class="pair">${PIPES.map(p => `
+      <article class="pane" data-p="${p.id}">
+        <header><h3>${p.name}</h3><span class="how">${esc(p.id === "vector_rag" ? `embed → top-${STATUS.top_k} chunks → answer` : p.how)}</span><span class="state run">waiting</span></header>
+        <div class="metrics">
+          <div class="metric" data-m="time"><div class="k">Time</div><div class="v">–</div><div class="s">&nbsp;</div></div>
+          <div class="metric" data-m="calls"><div class="k">LLM calls</div><div class="v">0</div><div class="s">&nbsp;</div></div>
+          <div class="metric" data-m="tokens"><div class="k">Tokens in / out</div><div class="v">–</div><div class="s">&nbsp;</div></div>
+          <div class="metric" data-m="cost"><div class="k">Cost</div><div class="v">–</div><div class="s">&nbsp;</div></div>
+        </div>
+        <div class="answer"><div class="skel" style="width:92%"></div><div class="skel" style="width:76%"></div><div class="skel" style="width:58%"></div></div>
+        <div class="sources" hidden></div>
+        <details class="log" open><summary>Live API calls <span class="cnt">(0)</span></summary><ol></ol></details>
+        <footer hidden></footer>
+      </article>`).join("")}
+    </div>`;
+  $("#conv").appendChild(sec);
+  sec.scrollIntoView({ behavior: "smooth", block: "start" });
+  const panes = {};
+  for (const p of PIPES) panes[p.id] = { el: $(`.pane[data-p="${p.id}"]`, sec), t0: null, done: false, calls: 0, result: null };
+  return { sec, panes };
+}
+
+function setMetric(pane, key, v, s) {
+  const m = $(`[data-m="${key}"]`, pane.el);
+  if (v !== undefined) $(".v", m).textContent = v;
+  if (s !== undefined) $(".s", m).textContent = s || " ";
+}
+
+function applyTotals(pane, t) {
+  setMetric(pane, "calls", String(t.llm_calls), t.embed_calls ? `+ ${t.embed_calls} embedding` : "");
+  setMetric(pane, "tokens", `${fmtK(t.input_tokens + t.embed_tokens)} / ${fmtK(t.output_tokens)}`,
+    [t.cached_tokens ? `${fmtK(t.cached_tokens)} cached` : "", t.reasoning_tokens ? `${fmtK(t.reasoning_tokens)} reasoning` : ""].filter(Boolean).join(" · "));
+  setMetric(pane, "cost", fmtUsd(t.cost_usd));
+}
+
+function addCall(pane, c) {
+  pane.calls++;
+  const ol = $(".log ol", pane.el);
+  const li = document.createElement("li");
+  const kind = c.kind === "embeddings" ? "embed" : c.kind;
+  const tok = c.kind === "embeddings"
+    ? `${fmtInt(c.input)} tokens`
+    : `${fmtInt(c.input)} in${c.cached ? ` (${fmtInt(c.cached)} cached)` : ""} → ${fmtInt(c.output)} out`;
+  li.innerHTML = `<span class="n">${pane.calls}</span><span class="kind">${esc(kind)}</span> ${esc(c.model)} · ${tok} · ${fmtS(c.latency_s)} · ${fmtUsd(c.cost_usd)}${c.ok ? "" : ' · <span class="bad">failed</span>'}`
+    + (c.tools || []).map(t => `<span class="tool">${esc(t.name)} ${esc(t.args)}</span>`).join("");
+  ol.appendChild(li);
+  ol.scrollTop = ol.scrollHeight;
+  $(".log .cnt", pane.el).textContent = `(${pane.calls})`;
+}
+
+function finish(pane, ev) {
+  pane.done = true;
+  const st = $(".state", pane.el);
+  if (ev.type === "error") {
+    st.className = "state err"; st.textContent = "error";
+    $(".answer", pane.el).innerHTML = `<div class="err">${esc(ev.message)}</div>`;
+    setMetric(pane, "time", pane.t0 ? fmtS((performance.now() - pane.t0) / 1000) : "–");
+    return;
+  }
+  const s = ev.summary;
+  pane.result = s;
+  st.className = "state"; st.textContent = `done in ${fmtS(s.wall_s)}`;
+  const stages = Object.entries(ev.stage_s || {});
+  setMetric(pane, "time", fmtS(s.wall_s), `${fmtS(s.llm_time_s)} in API calls`);
+  applyTotals(pane, s);
+  $(".answer", pane.el).innerHTML = md(ev.answer);
+  const src = $(".sources", pane.el);
+  const pages = ev.retrieved || [];
+  if (pages.length) {
+    src.hidden = false;
+    src.innerHTML = `<span class="lbl">Pages used</span>` + pages.map(r => `<span class="src">${esc(r.doc_id)} p.${esc(r.page)}</span>`).join("");
+  }
+  const f = $("footer", pane.el);
+  f.hidden = false;
+  f.innerHTML = stages.map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))} ${fmtS(v)}</span>`).join("")
+    + (ev.context_tokens ? `<span>context ${fmtK(ev.context_tokens)} tokens</span>` : "")
+    + (s.usage_source ? `<span>usage from PageIndex report</span>` : "")
+    + (ev.trace_url ? `<a href="${esc(ev.trace_url)}" target="_blank" rel="noopener">Langfuse trace ↗</a>` : "");
+  $(".log", pane.el).open = false;
+  const ss = session[ev.pipeline];
+  ss.n++; ss.cost += s.cost_usd; ss.time += s.wall_s;
+  renderTotals();
+}
+
+function verdict(turn) {
+  const a = turn.panes.pageindex.result, b = turn.panes.vector_rag.result;
+  if (!a || !b) return;
+  const ratio = (x, y) => (x / Math.max(y, 1e-9));
+  const parts = [];
+  const fast = a.wall_s <= b.wall_s ? ["PageIndex", ratio(b.wall_s, a.wall_s)] : ["Vector RAG", ratio(a.wall_s, b.wall_s)];
+  parts.push(`<b>${fast[0]}</b> was ${fast[1] >= 1.1 ? fast[1].toFixed(1) + "× faster" : "about as fast"}`);
+  if (a.cost_usd > 0 && b.cost_usd > 0) {
+    const cheap = a.cost_usd <= b.cost_usd ? ["PageIndex", ratio(b.cost_usd, a.cost_usd)] : ["Vector RAG", ratio(a.cost_usd, b.cost_usd)];
+    parts.push(`<b>${cheap[0]}</b> was ${cheap[1] >= 1.1 ? cheap[1].toFixed(1) + "× cheaper" : "about the same cost"}`);
+  }
+  parts.push(`PageIndex made <b>${a.llm_calls}</b> LLM call${a.llm_calls === 1 ? "" : "s"} vs <b>${b.llm_calls}</b>`);
+  for (const [id, r, other] of [["pageindex", a, b], ["vector_rag", b, a]]) {
+    const el = turn.panes[id].el;
+    $('[data-m="time"]', el).classList.toggle("win", r.wall_s < other.wall_s);
+    $('[data-m="cost"]', el).classList.toggle("win", r.cost_usd < other.cost_usd);
+  }
+  const v = document.createElement("div");
+  v.className = "verdict";
+  v.innerHTML = parts.join(" · ") + ". Speed and cost only: check the answers and pages yourself for accuracy.";
+  turn.sec.appendChild(v);
+}
+
+function renderTotals() {
+  const t = $("#totals");
+  t.hidden = false;
+  t.innerHTML = PIPES.map(p => {
+    const s = session[p.id];
+    return `<span><span class="sw ${p.id === "pageindex" ? "pi" : "vr"}"></span>${p.name}: <b>${s.n}</b> answer${s.n === 1 ? "" : "s"} · <b>${fmtUsd(s.cost)}</b> · avg <b>${fmtS(s.n ? s.time / s.n : null)}</b></span>`;
+  }).join("") + `<span>Session total <b>${fmtUsd(session.pageindex.cost + session.vector_rag.cost)}</b></span>`;
+}
+
+// ------------------------------------------------------------------ ask
+async function ask() {
+  const question = $("#q").value.trim();
+  if (!question || busy) return;
+  busy = true; $("#ask").disabled = true; $("#ask").textContent = "Answering…";
+  const docId = $("#scope").value || null;
+  $("#q").value = ""; autosize();
+  const turn = newTurn(question, docId);
+  const tick = setInterval(() => {
+    for (const p of Object.values(turn.panes))
+      if (p.t0 && !p.done) { const s = (performance.now() - p.t0) / 1000; $(".state", p.el).textContent = `running ${s.toFixed(1)}s`; setMetric(p, "time", fmtS(s)); }
+  }, 100);
+  try {
+    const res = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question, doc_id: docId }) });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i); buf = buf.slice(i + 1);
+        if (!line.trim()) continue;
+        const ev = JSON.parse(line), pane = turn.panes[ev.pipeline];
+        if (ev.type === "start") { pane.t0 = performance.now(); $(".state", pane.el).textContent = "running"; }
+        else if (ev.type === "call") { addCall(pane, ev.call); applyTotals(pane, ev.totals); }
+        else if (ev.type === "done" || ev.type === "error") finish(pane, ev);
+        else if (ev.type === "end") verdict(turn);
+      }
+    }
+  } catch (e) {
+    for (const p of Object.values(turn.panes)) if (!p.done) finish(p, { type: "error", message: "Connection to the demo server failed: " + e.message });
+  } finally {
+    clearInterval(tick);
+    busy = false; $("#ask").disabled = false; $("#ask").textContent = "Ask both";
+    $("#q").focus();
+  }
+}
+
+function autosize() { const t = $("#q"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; }
+$("#q").addEventListener("input", autosize);
+$("#q").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
+$("#ask").addEventListener("click", ask);
+$("#scope").addEventListener("change", renderExamples);
+$("#examples").addEventListener("click", e => { if (e.target.classList.contains("ex")) { $("#q").value = e.target.textContent; autosize(); $("#q").focus(); } });
+const composer = document.querySelector(".composer");
+new ResizeObserver(() => document.documentElement.style.setProperty("--composer-h", composer.offsetHeight + 16 + "px")).observe(composer);
+loadStatus().catch(e => { $("#setup").innerHTML = `<div class="notice"><h2>Could not reach the demo server</h2>${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>
