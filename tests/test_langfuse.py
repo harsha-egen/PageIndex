@@ -65,7 +65,10 @@ def test_meter_emits_generations_inside_trace():
     assert len(gens) == 3 and all(g.parent == "pageindex/document" for g in gens)
     u = gens[0].updates[-1]
     assert u["usage_details"] == {"input": 600, "input_cached_tokens": 400, "output": 200}
-    assert abs(sum(u["cost_details"].values()) - (600 * 2 + 400 * 0.2 + 200 * 12) / 1e6) < 1e-12
+    expected = (600 * 2 + 400 * 0.2 + 200 * 12) / 1e6
+    buckets = {k: v for k, v in u["cost_details"].items() if k != "total"}
+    assert abs(sum(buckets.values()) - expected) < 1e-12
+    assert abs(u["cost_details"]["total"] - expected) < 1e-12  # explicit total for Langfuse
     assert ATTRS[-1]["user_id"] == "pageindex/document" and "query" in ATTRS[-1]["tags"]
     assert ("score", {"trace_id": tid, "name": "accuracy", "value": 1.0, "data_type": "NUMERIC", "comment": None}) in EVENTS
     assert s.summary(pricing)["llm_calls"] == 3

@@ -73,7 +73,8 @@ def main() -> None:
             if _num(r.get("embed_tokens")) > 0:
                 with tracer.generation("embeddings", emb_model) as g:
                     e = int(_num(r["embed_tokens"]))
-                    g.update(usage_details={"input": e}, cost_details={"input": e * price[emb_model]["input"] / 1e6})
+                    c = e * price[emb_model]["input"] / 1e6
+                    g.update(usage_details={"input": e}, cost_details={"input": c, "total": c})
             if span is not None:
                 span.update(output=r.get("answer") or "(modeled row)")
         for k in ("page_hit", "latency_s", "llm_calls"):

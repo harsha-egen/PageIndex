@@ -120,6 +120,9 @@ class Tracer:
         cost = {"input": uncached * price.get("input", 0) / 1e6,
                 "input_cached_tokens": call.cached * price.get("cached", price.get("input", 0)) / 1e6,
                 "output": call.output * price.get("output", 0) / 1e6}
+        # Langfuse does not always sum multi-bucket cost_details into totalCost
+        # (the dashboard then shows $0), so send the total explicitly.
+        cost["total"] = sum(cost.values())
         return usage, cost
 
     # ------------------------------------------------------------------ scores
