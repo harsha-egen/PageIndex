@@ -1,0 +1,49 @@
+# The 23 questions from docs/DEMO_SCRIPT.md, with the correct answer from the source document.
+# Run them through any pipelines:  python -m bench.demo_compare --pipelines vector_pg vector_pg_hybrid pageindex
+# doc: null = whole-library question (corpus scope).
+- {id: 1,  act: 1, doc: LBL-0004a0bb, q: "What temperature should varenicline tablets be stored at?",
+   gold: "20-25 C (68-77 F); excursions 15-30 C (59-86 F). p.19"}
+- {id: 2,  act: 1, doc: LBL-00097e78, q: "Can tamsulosin be taken together with ketoconazole?",
+   gold: "No: 0.4 mg should not be used with strong CYP3A4 inhibitors such as ketoconazole."}
+- {id: 3,  act: 2, doc: LBL-0002ad27, q: "If a patient's LVEF drops 10% or more from baseline and below the lower limit of normal, what should be done, and exactly what dose do they resume at if it recovers?",
+   gold: "Withhold up to 4 weeks; if LVEF recovers resume at the first dose reduction (adult 2 mg -> 1.5 mg daily, Table 3 p.3); if not, discontinue."}
+- {id: 4,  act: 2, doc: LBL-0002ad27, q: "List every warning and precaution in section 5 of this label, one line each.",
+   gold: "13 subsections 5.1 New Primary Malignancies ... 5.13 Embryo-Fetal Toxicity, pp.4-8."}
+- {id: 5,  act: 2, doc: LBL-000155a8, q: "Why is naproxen contraindicated around CABG surgery? Follow the cross-reference and explain what the referenced warning section says.",
+   gold: "Section 4 -> see 5.1: COX-2 NSAID trials in the 10-14 days after CABG showed more MI and stroke. p.4"}
+- {id: 6,  act: 3, doc: null, q: "Which of these medicines need a lower starting dose in severe renal impairment, and what is that dose?",
+   gold: "Varenicline 0.5 mg once daily (CrCl < 30); glimepiride 1 mg once daily (renal impairment). Among the indexed docs."}
+- {id: 7,  act: 3, doc: null, q: "Which drug should be taken at least 4 hours before colesevelam?",
+   gold: "Glimepiride (sections 2.1, 7.4)."}
+- {id: 8,  act: 3, doc: null, q: "Which of these drugs carries a boxed warning, and what is it about?",
+   gold: "Only naproxen: cardiovascular thrombotic events; GI bleeding, ulceration and perforation."}
+- {id: 9,  act: 4, doc: LBL-00097e78, q: "My patient is having eye surgery next month. Is there anything they should tell the surgeon about this medicine?",
+   gold: "Tell the ophthalmologist: intraoperative floppy iris syndrome (IFIS) in cataract/glaucoma surgery (5.5)."}
+- {id: 10, act: 4, doc: LBL-000155a8, q: "What is the recommended dose of naproxen for migraine?",
+   gold: "Not in the label (migraine is not an indication)."}
+- {id: 11, act: 4, doc: LBL-000155a8, q: "What is the recommended starting dose, and how is it adjusted for renal impairment?",
+   gold: "Indication-specific doses; not recommended if CrCl < 30 mL/min (8.7, p.13)."}
+- {id: 12, act: 5, doc: NCT01970865, q: "What dose do Phase 2 patients receive, and what are the rules for strong CYP3A inhibitors and strong CYP3A inducers, including any washout before the first dose?",
+   gold: "100 mg once daily, 21-day cycles; strong inhibitors not recommended, if unavoidable 100 -> 75 mg (75 -> 50 mg if already reduced); strong inducers contraindicated; exclusions: inhibitors within 10 days, inducers within 12 days before first dose (pp.101, 108, 119)."}
+- {id: 13, act: 5, doc: NCT01970865, q: "List all of the Phase 2 expansion cohorts (EXP-1 to EXP-6) and which patients go into each.",
+   gold: "EXP-1 treatment-naive ALK+; EXP-2 after crizotinib only; EXP-3A/3B; EXP-4 after 2 ALK TKIs; EXP-5 after 3 ALK TKIs; EXP-6 ROS1+. p.22"}
+- {id: 14, act: 5, doc: NCT01206062, q: "List all of the exclusion criteria, numbered.",
+   gold: "20 criteria, pp.18-20."}
+- {id: 15, act: 5, doc: NCT01206062, q: "What are the systolic blood pressure targets in the two treatment arms?",
+   gold: "< 120 vs < 140 mm Hg. p.25"}
+- {id: 16, act: 5, doc: NCT01206062, q: "How is adherence to antihypertensive medication monitored, and when?",
+   gold: "Adherence scale at baseline, 12 and 48 months; single-item screen at every medication visit. p.37"}
+- {id: 17, act: 5, doc: null, q: "Which study requires stopping strong CYP3A4 inducers at least 12 days before the first dose of study drug?",
+   gold: "The lorlatinib study (B7461001 / NCT01970865), exclusion 17, p.101."}
+- {id: 18, act: 6, doc: null, q: "Which of the drug labels tells you to withhold the drug when left ventricular ejection fraction drops, and what exactly should be done?",
+   gold: "Mekinist (trametinib) label: asymptomatic absolute LVEF decrease >=10% from baseline and below LLN -> withhold up to 4 weeks; if improved to normal resume at a lower dose, if not permanently discontinue; symptomatic cardiomyopathy or LVEF drop >20% below LLN -> permanently discontinue. Must name the Mekinist label (not a trial protocol)."}
+- {id: 19, act: 6, doc: LBL-0002ad27, q: "What does section 8.6 of this label say?",
+   gold: "8.6 Hepatic Impairment: no dose adjustment for mild hepatic impairment; a recommended dosage has not been established for moderate or severe hepatic impairment."}
+- {id: 20, act: 6, doc: null, q: "For each of the five drug labels in the library, what is the maximum recommended daily dose?",
+   gold: "Naproxen: 1,500 mg/day (the label's maximum recommended human daily dose; up to 6 months in patients who tolerate lower doses). Mekinist: 2 mg once daily. Glimepiride: 8 mg once daily. Varenicline: 1 mg twice daily (2 mg/day). Tamsulosin: 0.8 mg once daily. All five drugs must be covered."}
+- {id: 21, act: 6, doc: null, q: "Which documents in the library are clinical trial protocols, and what is each one studying?",
+   gold: "Two protocols: NCT01970865 / B7461001, phase 1/2 study of lorlatinib (PF-06463922) in advanced ALK+ or ROS1+ NSCLC; NCT01206062 SPRINT, intensive (<120) vs standard (<140 mm Hg) systolic blood pressure targets. Both must be named with what they study."}
+- {id: 22, act: 6, doc: NCT01970865, q: "List every protocol amendment with its date, from Amendment 1 to the latest.",
+   gold: "Amendment 1 17 Sep 2013; 2 28 Mar 2014; 3 29 Oct 2014; 4 22 Jul 2015; 5 11 Mar 2016; 6 15 Jul 2016; 7 23 Mar 2018; 8 23 Jan 2019. All 8 with correct dates."}
+- {id: 23, act: 6, doc: LBL-0002ad27, q: "What drug interactions does this label describe?",
+   gold: "Section 7 only refers to the dabrafenib prescribing information for combination use. 12.3: dabrafenib does not change trametinib AUC; trametinib has no clinically relevant effect on a sensitive CYP3A4 substrate; in vitro CYP2C8 inhibitor; P-gp and BSEP substrate (P-gp inhibition unlikely to matter)."}

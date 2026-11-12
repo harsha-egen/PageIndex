@@ -8,8 +8,8 @@ latency, tokens, cost, accuracy and traceability for both, then renders an inter
 
 | | Vector RAG (baseline) | PageIndex |
 |---|---|---|
-| Index | page text → 512-token chunks (64 overlap) → `text-embedding-3-small` | per-document tree index (`gpt-5.6-luna`) |
-| Retrieve | cosine top-8 (exact, in-memory: best case for vectors) | LLM agent searches the tree (multi-turn) |
+| Index | page text → 512-token chunks (64 overlap) → `text-embedding-3-small` → Postgres + pgvector | per-document tree index (`gpt-5.6-luna`) |
+| Retrieve | cosine top-8 from a pgvector HNSW index (document scope = SQL filter) | LLM agent searches the tree (multi-turn) |
 | Answer | **same chat model** (`gpt-5.6-terra`, medium reasoning) | **same chat model** |
 | Citations | pages of retrieved chunks | `<cite page=…>` from PageIndex |
 
@@ -86,6 +86,32 @@ python -m bench.langfuse_replay --dir results/modeled               # full model
 
 Dashboard widget spec: `docs/LANGFUSE_DASHBOARD.md`.
 
+## pgvector (default vector baseline)
+
+The vector pipeline runs on PostgreSQL + pgvector (`vector_pg`: HNSW, cosine, document
+scope as a SQL filter). `vector_pg_hybrid` (pgvector + full-text, RRF) is available with
+`--pipelines`; untuned it scored worse (see `docs/DEMO_SCRIPT.md`).
+
+Local server on macOS (Homebrew, port 5433, data in `.pgdata/`, git-ignored):
+
+```bash
+brew install postgresql@17 pgvector
+export LC_ALL=en_US.UTF-8
+/opt/homebrew/opt/postgresql@17/bin/initdb -D .pgdata -U bench --auth=trust -E UTF8
+/opt/homebrew/opt/postgresql@17/bin/pg_ctl -D .pgdata -o "-p 5433 -c listen_addresses=127.0.0.1" -l .pgdata/server.log start
+/opt/homebrew/opt/postgresql@17/bin/createdb -h 127.0.0.1 -p 5433 -U bench clinical_bench
+python -m tests.test_pgvector                 # store checks against the live server
+```
+
+Stop it with `pg_ctl -D .pgdata stop`. To use another server, set
+`PGVECTOR_DSN=postgresql://user:pass@host:5432/db` (the `vector` extension must be available).
+
+Compare pipelines on the demo questions (`docs/demo_questions.yaml`):
+
+```bash
+python -m bench.demo_compare --judge                       # pgvector + PageIndex
+```
+
 ## Side-by-side chat demo
 
 Ask a question in the browser and watch both pipelines answer it at the same time, with
@@ -99,6 +125,8 @@ python -m bench.build_corpus --scale small --only labels  # 25 FDA labels (free,
 python -m bench.run_benchmark index --limit 5             # index 5 docs in both pipelines
 python -m bench.chat_app                                  # http://127.0.0.1:8765
 ```
+
+The vector column runs on pgvector; `--vector vector_pg_hybrid` adds full-text search.
 
 * Pick one document (document scope) or "Whole library" (corpus scope).
 * Same answering model, prompt and reasoning effort as the benchmark; same meter.
@@ -121,8 +149,8 @@ report shows a "Modeled preview — not measured" banner. Never present modeled 
 ## Fairness notes and known limits
 
 * Same answering model, reasoning effort and instructions on both sides.
-* The vector baseline uses exact search in memory: real vector DBs add latency, and a reranker or
-  hybrid BM25 would raise its accuracy. Add them as extra pipelines if your team uses them.
+* The vector baseline is pgvector with HNSW and no reranker. A tuned hybrid search or a
+  cross-encoder reranker could raise its accuracy. Add them as extra pipelines if your team uses them.
 * PageIndex local mode handles text-based PDFs only. Scanned protocols need PageIndex Cloud (OCR);
   the corpus builder drops scanned PDFs so both pipelines see the same text.
 * Corpus scope for PageIndex uses its built-in local library search. PageIndex Cloud's File System
@@ -141,7 +169,7 @@ bench/tracing.py            Langfuse traces, tags, scores
 bench/langfuse_replay.py    push a results folder (e.g. the modeled preview) into Langfuse
 docs/LANGFUSE_DASHBOARD.md  widget-by-widget dashboard spec
 bench/data/                 ClinicalTrials.gov, openFDA, synthetic notes, PDF renderer
-bench/pipelines/            vector_rag.py, pageindex_rag.py
+bench/pipelines/            pgvector_rag.py, pageindex_rag.py (vector_rag.py: shared chunking + prompt)
 bench/qa_gen.py             verified question set with gold pages
 bench/evaluate.py           LLM judge + page-hit metrics
 bench/run_benchmark.py      index / query / judge (resumable)

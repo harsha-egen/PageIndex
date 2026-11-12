@@ -42,6 +42,15 @@ vector_rag:
   chunk_overlap: 64
   top_k: 8
   embed_batch: 256
+  # Postgres + pgvector store, used by pipelines vector_pg and vector_pg_hybrid.
+  # Connection: env PGVECTOR_DSN overrides dsn. Local server: see README "pgvector".
+  pgvector:
+    dsn: postgresql://bench@127.0.0.1:5433/clinical_bench
+    table: chunks
+    m: 16                      # HNSW graph degree
+    ef_construction: 64
+    ef_search: 100             # candidates per query (recall vs latency)
+    iterative_scan: relaxed_order   # pgvector >= 0.8: keeps filtered (document-scope) searches at k rows
 
 pageindex:
   mode: local                  # local | cloud  (cloud needs PAGEINDEX_API_KEY)
@@ -49,6 +58,10 @@ pageindex:
   citations: true
 
 benchmark:
+  # vector_pg = Postgres + pgvector HNSW; vector_pg_hybrid = pgvector + Postgres full-text search,
+  #   fused with RRF (opt-in: scored worse untuned, see docs/DEMO_SCRIPT.md; --pipelines ... vector_pg_hybrid)
+  pipelines: [vector_pg, pageindex]
+  vector_baseline: vector_pg   # the vector pipeline shown as "Vector RAG" in the HTML report
   scopes: [document, corpus]   # document = question tells the system which doc; corpus = open search
   concurrency: 1               # keep 1 for clean latency numbers
   query_timeout_s: 180

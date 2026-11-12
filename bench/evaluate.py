@@ -13,7 +13,9 @@ import json
 JUDGE_SYSTEM = """You grade answers to clinical document questions against a gold answer.
 Score 1 if the answer states the gold fact correctly (numbers, units, dose, frequency, criterion must match;
 extra correct detail is fine). Score 0.5 if partly correct or correct but hedged with a wrong alternative.
-Score 0 if wrong, missing, or 'not found'. Return JSON {"score": 0|0.5|1, "reason": str}."""
+Score 0 if wrong, missing, or 'not found'. Exception: if the gold answer says the information is NOT in the
+document, score 1 when the candidate says it is not found / not provided, and 0 if it invents an answer.
+Return JSON {"score": 0|0.5|1, "reason": str}."""
 
 
 def page_metrics(retrieved: list[dict], doc_id: str, gold_pages: list[int]) -> dict:

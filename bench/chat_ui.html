@@ -30,6 +30,7 @@
   --shadow: none;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }   /* author display rules must not un-hide elements */
 html, body { margin: 0; }
 body { background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; }
 a { color: inherit; }
@@ -101,9 +102,13 @@ main { padding-bottom: var(--composer-h, 200px); }
 .answer .err { color: var(--err); background: var(--err-soft); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
 .skel { height: 10px; border-radius: 5px; background: var(--surface-2); margin: 8px 0; animation: pulse 1.4s infinite ease-in-out; }
 
-.sources { padding: 0 14px 10px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.sources .lbl { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; }
+.sources { padding: 0 14px 10px; display: grid; gap: 6px; }
+.srow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.sources .lbl { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .04em; margin-right: 2px; cursor: help; border-bottom: 1px dotted var(--faint); }
+.sources .note { font-size: 11.5px; color: var(--faint); }
 .src { font-size: 11.5px; font-family: var(--mono); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+.src.hit { background: var(--accent-soft); color: var(--accent); border-color: transparent; font-weight: 600; }
+.srow.read .src { border-style: dashed; }
 
 details.log { border-top: 1px solid var(--border); font-size: 12.5px; }
 details.log summary { cursor: pointer; padding: 8px 14px; color: var(--muted); list-style: none; display: flex; gap: 8px; }
@@ -140,6 +145,11 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--s
 #examples::-webkit-scrollbar { display: none; }
 .ex { white-space: nowrap; flex: none; font-size: 12.5px; border: 1px dashed var(--border); background: transparent; color: var(--muted); border-radius: 999px; padding: 3px 10px; cursor: pointer; font-family: inherit; }
 .ex:hover { color: var(--text); border-style: solid; }
+.mismatch { margin: 0 0 8px; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--text); font-size: 13px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.mismatch b { color: var(--warn); }
+.mismatch button { font: inherit; font-size: 12.5px; border-radius: 7px; padding: 3px 10px; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+.mismatch button.go { background: var(--text); color: var(--surface); border-color: transparent; font-weight: 600; }
+#demo { max-width: 220px; }
 .hint { font-size: 11.5px; color: var(--faint); margin-left: auto; white-space: nowrap; }
 @media (max-width: 900px) { .hint { display: none; } }
 @media (max-width: 600px) { .under select { width: 100%; } .box { padding: 8px; } }
@@ -175,11 +185,13 @@ select { font: inherit; font-size: 13px; color: var(--text); background: var(--s
 <div class="composer">
   <div class="wrap">
     <div class="box">
+      <div class="mismatch" id="mismatch" hidden></div>
       <div class="row">
         <textarea id="q" rows="1" placeholder="Ask a clinical question…"></textarea>
         <button class="ask" id="ask">Ask both</button>
       </div>
       <div class="under">
+        <select id="demo" aria-label="Pick a question from the demo script" hidden></select>
         <select id="scope" aria-label="Which documents to search"></select>
         <span id="examples"></span>
         <span class="hint">Enter to send · Shift+Enter for a new line</span>
@@ -237,6 +249,7 @@ function md(text) {
 async function loadStatus() {
   STATUS = await (await fetch("/api/status")).json();
   const lf = STATUS.langfuse;
+  if (STATUS.vector) PIPES[1].how = STATUS.vector.label;
   const chips = [];
   if (STATUS.fake) chips.push(`<span class="chip fake">Simulated: no API calls</span>`);
   chips.push(`<span class="chip">answer model <b>${esc(STATUS.models.chat)}</b>${STATUS.models.reasoning_effort ? " · " + esc(STATUS.models.reasoning_effort) : ""}</span>`);
@@ -263,6 +276,7 @@ async function loadStatus() {
   sel.innerHTML = opts;
   if (both.length) sel.value = both[0].doc_id;
   renderExamples();
+  renderDemoPicker();
   renderSetup(both.length);
 }
 
@@ -304,7 +318,7 @@ function newTurn(question, docId) {
   sec.innerHTML = `<div class="qline"><span class="scope-tag">${esc(scopeLabel)}</span><span class="q">${esc(question)}</span></div>
     <div class="pair">${PIPES.map(p => `
       <article class="pane" data-p="${p.id}">
-        <header><h3>${p.name}</h3><span class="how">${esc(p.id === "vector_rag" ? `embed → top-${STATUS.top_k} chunks → answer` : p.how)}</span><span class="state run">waiting</span></header>
+        <header><h3>${p.name}</h3><span class="how">${esc(p.id === "vector_rag" ? `${p.how ? p.how + " · " : ""}top-${STATUS.top_k} chunks` : p.how)}</span><span class="state run">waiting</span></header>
         <div class="metrics">
           <div class="metric" data-m="time"><div class="k">Time</div><div class="v">–</div><div class="s">&nbsp;</div></div>
           <div class="metric" data-m="calls"><div class="k">LLM calls</div><div class="v">0</div><div class="s">&nbsp;</div></div>
@@ -320,8 +334,8 @@ function newTurn(question, docId) {
   $("#conv").appendChild(sec);
   sec.scrollIntoView({ behavior: "smooth", block: "start" });
   const panes = {};
-  for (const p of PIPES) panes[p.id] = { el: $(`.pane[data-p="${p.id}"]`, sec), t0: null, done: false, calls: 0, result: null };
-  return { sec, panes };
+  for (const p of PIPES) panes[p.id] = { el: $(`.pane[data-p="${p.id}"]`, sec), t0: null, done: false, calls: 0, result: null, answer: "", docId, read: new Map() };
+  return { sec, panes, question, docId };
 }
 
 function setMetric(pane, key, v, s) {
@@ -349,7 +363,55 @@ function addCall(pane, c) {
     + (c.tools || []).map(t => `<span class="tool">${esc(t.name)} ${esc(t.args)}</span>`).join("");
   ol.appendChild(li);
   ol.scrollTop = ol.scrollHeight;
+  for (const t of c.tools || []) notePagesRead(pane, t);
   $(".log .cnt", pane.el).textContent = `(${pane.calls})`;
+}
+
+// "1-4", "5", "2,7-8" -> [1,2,3,4] ...
+function pageList(spec) {
+  const out = [];
+  for (const part of String(spec ?? "").split(",")) {
+    const m = part.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
+    if (!m) continue;
+    const a = +m[1], b = m[2] ? +m[2] : a;
+    for (let p = a; p <= Math.min(b, a + 200); p++) out.push(p);
+  }
+  return out;
+}
+function notePagesRead(pane, tool) {
+  if (!/page/i.test(tool.name || "")) return;   // e.g. get_page_content
+  let a = {};
+  try { a = JSON.parse(tool.args || "{}"); } catch (e) { return; }
+  const doc = a.doc_name ? String(a.doc_name).replace(/\.pdf$/i, "") : pane.docId;
+  if (!doc) return;
+  if (!pane.read.has(doc)) pane.read.set(doc, new Set());
+  for (const p of pageList(a.pages ?? a.page)) pane.read.get(doc).add(p);
+}
+// pages an answer cites in the vector style: [DOC p.4] or [DOC p.4-5]
+function citedPages(answer) {
+  const out = new Set();
+  for (const m of String(answer || "").matchAll(/\[([A-Za-z0-9_.\-]+) p\.\s?(\d+)(?:\s*[-–]\s*(\d+))?\]/g))
+    for (const p of pageList(m[3] ? `${m[2]}-${m[3]}` : m[2])) out.add(`${m[1]}|${p}`);
+  return out;
+}
+const chip = (doc, page, cls = "") => `<span class="src ${cls}">${esc(doc)} p.${esc(page)}</span>`;
+
+function renderSources(pane, ev) {
+  const src = $(".sources", pane.el);
+  const pages = ev.retrieved || [];
+  let html = "";
+  if (ev.pipeline === "pageindex") {
+    if (pages.length) html += `<div class="srow"><span class="lbl" title="Pages the answer's citations [1], [2]… point to">Pages cited</span>${pages.map(r => chip(r.doc_id, r.page, "hit")).join("")}</div>`;
+    const read = [...pane.read].flatMap(([d, ps]) => [...ps].sort((a, b) => a - b).map(p => [d, p]));
+    if (read.length) html += `<div class="srow read"><span class="lbl" title="Pages the agent opened while searching (from its get_page_content calls)">Pages read</span>${read.map(([d, p]) => chip(d, p)).join("")}</div>`;
+  } else if (pages.length) {
+    const cited = citedPages(ev.answer);
+    const hits = pages.filter(r => cited.has(`${r.doc_id}|${r.page}`)).length;
+    html += `<div class="srow"><span class="lbl" title="Every page touched by the passages vector search returned and gave the model, whether or not the answer used them">Pages retrieved</span>${pages.map(r => chip(r.doc_id, r.page, cited.has(`${r.doc_id}|${r.page}`) ? "hit" : "")).join("")}</div>`;
+    html += `<div class="note">${hits ? `Highlighted: ${hits} of ${pages.length} pages cited in the answer.` : `None of the ${pages.length} pages is cited in the answer.`}</div>`;
+  }
+  src.hidden = !html;
+  src.innerHTML = html;
 }
 
 function finish(pane, ev) {
@@ -363,17 +425,13 @@ function finish(pane, ev) {
   }
   const s = ev.summary;
   pane.result = s;
+  pane.answer = ev.answer;
   st.className = "state"; st.textContent = `done in ${fmtS(s.wall_s)}`;
   const stages = Object.entries(ev.stage_s || {});
   setMetric(pane, "time", fmtS(s.wall_s), `${fmtS(s.llm_time_s)} in API calls`);
   applyTotals(pane, s);
   $(".answer", pane.el).innerHTML = md(ev.answer);
-  const src = $(".sources", pane.el);
-  const pages = ev.retrieved || [];
-  if (pages.length) {
-    src.hidden = false;
-    src.innerHTML = `<span class="lbl">Pages used</span>` + pages.map(r => `<span class="src">${esc(r.doc_id)} p.${esc(r.page)}</span>`).join("");
-  }
+  renderSources(pane, ev);
   const f = $("footer", pane.el);
   f.hidden = false;
   f.innerHTML = stages.map(([k, v]) => `<span>${esc(k.replace(/_/g, " "))} ${fmtS(v)}</span>`).join("")
@@ -403,6 +461,15 @@ function verdict(turn) {
     $('[data-m="time"]', el).classList.toggle("win", r.wall_s < other.wall_s);
     $('[data-m="cost"]', el).classList.toggle("win", r.cost_usd < other.cost_usd);
   }
+  const nf = x => /^\s*not found in the provided document/i.test(x || "");
+  if (turn.docId && nf(turn.panes.pageindex.answer) && nf(turn.panes.vector_rag.answer)) {
+    const tip = document.createElement("div");
+    tip.className = "mismatch";
+    tip.innerHTML = `<span>Both said <b>not found</b> in ${esc(docName(turn.docId))}. Is the right document selected?</span>
+      <button class="go" type="button">Ask the whole library instead</button>`;
+    tip.querySelector("button").onclick = () => { $("#scope").value = ""; renderExamples(); $("#q").value = turn.question; autosize(); ask(true); };
+    turn.sec.appendChild(tip);
+  }
   const v = document.createElement("div");
   v.className = "verdict";
   v.innerHTML = parts.join(" · ") + ". Speed and cost only: check the answers and pages yourself for accuracy.";
@@ -418,10 +485,77 @@ function renderTotals() {
   }).join("") + `<span>Session total <b>${fmtUsd(session.pageindex.cost + session.vector_rag.cost)}</b></span>`;
 }
 
+// ------------------------------------------------------------------ demo script + scope guard
+const ACTS = { 1: "Act 1 · Simple lookups", 2: "Act 2 · Structure-heavy", 3: "Act 3 · Whole library",
+               4: "Act 4 · Honesty checks", 5: "Act 5 · Long protocols", 6: "Act 6 · Where pgvector fails" };
+function renderDemoPicker() {
+  const qs = STATUS.demo_questions || [], sel = $("#demo");
+  if (!qs.length) { sel.hidden = true; return; }
+  const groups = {};
+  for (const q of qs) (groups[q.act] ??= []).push(q);
+  sel.innerHTML = `<option value="">Demo script (${qs.length} questions)…</option>` + Object.entries(groups).map(([a, list]) =>
+    `<optgroup label="${esc(ACTS[a] || "Act " + a)}">` + list.map(q =>
+      `<option value="${q.id}">#${q.id} ${esc(q.q.length > 64 ? q.q.slice(0, 62) + "…" : q.q)}</option>`).join("") + "</optgroup>").join("");
+  sel.hidden = false;
+}
+function pickDemo(id) {
+  const q = (STATUS.demo_questions || []).find(x => String(x.id) === String(id));
+  if (!q) return;
+  $("#scope").value = q.doc || "";
+  renderExamples();
+  $("#q").value = q.q; autosize(); hideMismatch(); $("#q").focus();
+}
+
+// Words that identify a document (drug names, protocol codes), from its title and ID.
+const GENERIC = new Set(["hydrochloride", "sodium", "potassium", "tablets", "tablet", "capsules", "capsule", "extended",
+  "release", "delayed", "oral", "solution", "injection", "full", "prescribing", "information", "study"]);
+function docKeywords(d) {
+  const head = String(d.title || "").split(" — ")[0];
+  let words = (head.match(/[A-Za-z][A-Za-z0-9\-]{3,}/g) || []).map(w => w.toLowerCase());
+  if (d.doc_type !== "fda_label") words = words.filter(w => /\d/.test(w));   // protocol titles are long sentences
+  return [...new Set([d.doc_id.toLowerCase(), ...words.filter(w => !GENERIC.has(w))])];
+}
+function mentionedDocs(question) {
+  const ql = question.toLowerCase();
+  return (STATUS.docs || []).filter(d => d.indexed.pageindex && d.indexed.vector_rag &&
+    docKeywords(d).some(k => new RegExp(`(^|[^a-z0-9])${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^a-z0-9]|$)`).test(ql)));
+}
+const docName = id => { const d = (STATUS.docs || []).find(x => x.doc_id === id); return d ? String(d.title).split(" — ")[0].split(" (")[0] : id; };
+function note(html) {   // brief, non-blocking notice above the question box
+  const m = $("#mismatch");
+  m.innerHTML = `<span>${html}</span>`; m.hidden = false; m.onclick = null;
+  clearTimeout(note.t); note.t = setTimeout(hideMismatch, 6000);
+}
+function hideMismatch() { const m = $("#mismatch"); m.hidden = true; m.innerHTML = ""; }
+function showMismatch(question, selected, target) {
+  const m = $("#mismatch");
+  m.innerHTML = `<span>This question mentions <b>${esc(docName(target))}</b>, but <b>${esc(docName(selected))}</b> is selected.</span>
+    <button class="go" type="button" data-act="switch">Switch to ${esc(docName(target))} and ask</button>
+    <button type="button" data-act="anyway">Ask ${esc(docName(selected))} anyway</button>`;
+  m.hidden = false;
+  m.onclick = e => {
+    const act = e.target.dataset.act;
+    if (act === "switch") { $("#scope").value = target; renderExamples(); hideMismatch(); ask(true); }
+    else if (act === "anyway") { hideMismatch(); ask(true); }
+  };
+}
+
 // ------------------------------------------------------------------ ask
-async function ask() {
+async function ask(skipCheck = false) {
   const question = $("#q").value.trim();
   if (!question || busy) return;
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const scripted = (STATUS.demo_questions || []).find(x => norm(x.q) === norm(question));
+  if (scripted && ($("#scope").value || null) !== (scripted.doc || null)) {
+    $("#scope").value = scripted.doc || ""; renderExamples();
+    note(`Demo script #${scripted.id}: switched to ${scripted.doc ? esc(docName(scripted.doc)) : "the whole library"}.`);
+  }
+  const selected = $("#scope").value || null;
+  if (!skipCheck && selected && !scripted) {
+    const hits = mentionedDocs(question);
+    if (hits.length && !hits.some(d => d.doc_id === selected)) { showMismatch(question, selected, hits[0].doc_id); return; }
+  }
+  if (!scripted) hideMismatch();
   busy = true; $("#ask").disabled = true; $("#ask").textContent = "Answering…";
   const docId = $("#scope").value || null;
   $("#q").value = ""; autosize();
@@ -462,7 +596,10 @@ async function ask() {
 function autosize() { const t = $("#q"); t.style.height = "auto"; t.style.height = Math.min(t.scrollHeight, 160) + "px"; }
 $("#q").addEventListener("input", autosize);
 $("#q").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); } });
-$("#ask").addEventListener("click", ask);
+$("#q").addEventListener("input", hideMismatch);
+$("#scope").addEventListener("change", hideMismatch);
+$("#ask").addEventListener("click", () => ask());
+$("#demo").addEventListener("change", e => { pickDemo(e.target.value); e.target.value = ""; });
 $("#scope").addEventListener("change", renderExamples);
 $("#examples").addEventListener("click", e => { if (e.target.classList.contains("ex")) { $("#q").value = e.target.textContent; autosize(); $("#q").focus(); } });
 const composer = document.querySelector(".composer");

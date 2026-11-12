@@ -45,6 +45,10 @@ def make_pipelines(cfg: dict, names: list[str]):
     if "vector_rag" in names:
         from bench.pipelines.vector_rag import VectorRAG
         out["vector_rag"] = VectorRAG(cfg, OpenAI(), RES / "stores" / "vector")
+    for name, hybrid in (("vector_pg", False), ("vector_pg_hybrid", True)):
+        if name in names:
+            from bench.pipelines.pgvector_rag import PgVectorRAG
+            out[name] = PgVectorRAG(cfg, OpenAI(), hybrid=hybrid)
     if "pageindex" in names:
         from bench.pipelines.pageindex_rag import PageIndexRAG
         out["pageindex"] = PageIndexRAG(cfg, RES / "stores" / "pageindex")
@@ -177,7 +181,9 @@ def export_csv():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("step", choices=["index", "query", "judge", "all"])
-    ap.add_argument("--pipelines", nargs="+", default=["vector_rag", "pageindex"])
+    ap.add_argument("--pipelines", nargs="+",
+                    choices=["vector_rag", "vector_pg", "vector_pg_hybrid", "pageindex"],
+                    help="default: benchmark.pipelines in config.yaml")
     ap.add_argument("--scopes", nargs="+")
     ap.add_argument("--limit", type=int)
     args = ap.parse_args()
@@ -187,7 +193,10 @@ def main():
     meter.tracer = tracer
     t = time.time()
     if args.step in ("index", "query", "all"):
-        pipes = make_pipelines(cfg, args.pipelines)
+        names = args.pipelines or cfg["benchmark"].get("pipelines", ["vector_pg", "pageindex"])
+        if "vector_pg_hybrid" in names and "vector_pg" not in names and args.step in ("index", "all"):
+            names = ["vector_pg"] + names   # hybrid searches the table vector_pg fills
+        pipes = make_pipelines(cfg, names)
     if args.step in ("index", "all"):
         run_index(cfg, meter, pipes, args.limit, tracer)
     if args.step in ("query", "all"):

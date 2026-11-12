@@ -11,3 +11,5 @@ requests>=2.31
 reportlab>=4.0          # renders FDA labels / synthetic notes to PDF
 tqdm>=4.66
 langfuse>=3.0          # tracing + dashboards (SDK v3+ / OpenTelemetry)
+psycopg[binary]>=3.2      # Postgres driver for the pgvector pipelines
+pgvector>=0.3            # numpy <-> vector type adapter

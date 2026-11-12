@@ -14,6 +14,16 @@ import pandas as pd
 from bench.common import ROOT
 
 PIPE = {"vector_rag": "Vector RAG", "pageindex": "PageIndex"}
+
+
+def _pipe_labels(cfg_path: Path = ROOT / "config.yaml") -> dict:
+    """The report compares two pipelines; config benchmark.vector_baseline picks the vector one."""
+    try:
+        import yaml
+        base = yaml.safe_load(cfg_path.read_text())["benchmark"].get("vector_baseline", "vector_rag")
+    except Exception:
+        base = "vector_rag"
+    return {base: "Vector RAG", "pageindex": "PageIndex"}
 COL = {"Vector RAG": "#2f6fdb", "PageIndex": "#e0752d"}
 DT = {"trial_protocol": "Trial protocols", "fda_label": "FDA labels", "clinical_note": "Patient notes"}
 
@@ -22,7 +32,9 @@ def load(d: Path):
     q = pd.read_csv(d / "query_metrics.csv")
     i = pd.read_csv(d / "index_metrics.csv")
     for df in (q, i):
-        df["Pipeline"] = df["pipeline"].map(PIPE)
+        labels = _pipe_labels() if set(df["pipeline"]) - set(PIPE) or "vector_rag" not in set(df["pipeline"]) else PIPE
+        df["Pipeline"] = df["pipeline"].map(labels)
+        df.drop(df[df["Pipeline"].isna()].index, inplace=True)   # other vector variants: see compare script
         df["Doc type"] = df["doc_type"].map(DT)
         if "error" in df:
             df.drop(df[df["error"].notna()].index, inplace=True)

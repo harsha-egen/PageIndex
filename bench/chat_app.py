@@ -2,7 +2,10 @@
 
     python -m bench.chat_app              # http://127.0.0.1:8765
     python -m bench.chat_app --fake       # UI rehearsal with simulated pipelines (no API calls, $0)
-    options: --port 8765  --no-browser
+    options: --port 8765  --no-browser  --vector vector_pg|vector_pg_hybrid
+
+The vector column runs on Postgres + pgvector (`vector_pg`); --vector vector_pg_hybrid adds
+Postgres full-text search fused with RRF.
 
 Both pipelines run in parallel on every question. Each OpenAI call they make is intercepted
 by the same UsageMeter the benchmark uses and streamed to the browser as it happens (model,
@@ -29,14 +32,19 @@ from bench.meter import Call, UsageMeter, _current, cost_of
 from bench.tracing import Tracer
 
 UI = Path(__file__).with_name("chat_ui.html")
+DEMO_QUESTIONS = ROOT / "docs" / "demo_questions.yaml"
 STORES = ROOT / "results" / "stores"
-PIPES = ("pageindex", "vector_rag")
+PIPES = ("pageindex", "vector_rag")   # UI columns; the "vector_rag" column runs self.vector
+VECTOR_LABELS = {"vector_pg": "pgvector HNSW", "vector_pg_hybrid": "pgvector + full-text (RRF)"}
 
 
 # --------------------------------------------------------------------------- demo core
 class ChatDemo:
-    def __init__(self, cfg: dict, fake: bool = False):
+    def __init__(self, cfg: dict, fake: bool = False, vector: str | None = None):
         self.cfg, self.fake = cfg, fake
+        self.vector = vector or cfg.get("benchmark", {}).get("vector_baseline", "vector_pg")
+        if self.vector not in VECTOR_LABELS:
+            self.vector = "vector_pg"
         self.meter = UsageMeter(cfg["pricing"]).install()
         if fake:
             self.tracer = Tracer({"langfuse": {"enabled": False}})
@@ -55,10 +63,10 @@ class ChatDemo:
             return
         try:
             from openai import OpenAI
-            from bench.pipelines.vector_rag import VectorRAG
-            self.pipes["vector_rag"] = VectorRAG(self.cfg, OpenAI(), STORES / "vector")
+            from bench.pipelines.pgvector_rag import PgVectorRAG
+            self.pipes["vector_rag"] = PgVectorRAG(self.cfg, OpenAI(), hybrid=self.vector == "vector_pg_hybrid")
         except Exception as e:  # noqa: BLE001
-            self.errors["vector_rag"] = f"{type(e).__name__}: {e}"
+            self.errors["vector_rag"] = f"{type(e).__name__}: {e} (is the pgvector server running? see README 'pgvector')"
         try:
             from bench.pipelines.pageindex_rag import PageIndexRAG
             self.pipes["pageindex"] = PageIndexRAG(self.cfg, STORES / "pageindex")
@@ -70,7 +78,8 @@ class ChatDemo:
         out = {p: set() for p in PIPES}
         v = self.pipes.get("vector_rag")
         if v is not None:
-            out["vector_rag"] = {m["doc_id"] for m in (v.store.meta or [])}
+            st = v.store
+            out["vector_rag"] = st.doc_ids() if hasattr(st, "doc_ids") else {m["doc_id"] for m in (st.meta or [])}
         pi = self.pipes.get("pageindex")
         if pi is not None:
             out["pageindex"] = set(pi.doc_map)
@@ -98,6 +107,8 @@ class ChatDemo:
             base = os.getenv("LANGFUSE_BASE_URL")
         docs = self.docs()
         return {"fake": self.fake,
+                "demo_questions": self.demo_questions(docs),
+                "vector": {"pipeline": self.vector, "label": VECTOR_LABELS.get(self.vector, self.vector)},
                 "models": {"chat": self.cfg["models"]["chat"], "embedding": self.cfg["models"]["embedding"],
                            "pageindex_index": self.cfg["models"]["pageindex_index"],
                            "reasoning_effort": self.cfg["models"].get("reasoning_effort")},
@@ -108,11 +119,27 @@ class ChatDemo:
                 "both_indexed": sum(1 for d in docs if all(d["indexed"].values())),
                 "manifest": manifest_path(self.cfg).exists()}
 
+    def demo_questions(self, docs: list[dict]) -> list[dict]:
+        """Questions from docs/demo_questions.yaml whose document is indexed by both pipelines."""
+        if self.fake or not DEMO_QUESTIONS.exists():
+            return []
+        import yaml
+        ready = {d["doc_id"] for d in docs if all(d["indexed"].values())}
+        try:
+            qs = yaml.safe_load(DEMO_QUESTIONS.read_text()) or []
+        except Exception:  # noqa: BLE001
+            return []
+        return [{"id": q["id"], "act": q.get("act"), "doc": q.get("doc"), "q": q["q"]}
+                for q in qs if q.get("doc") is None or q.get("doc") in ready]
+
     # ------------------------------------------------------------------ asking
     def _call_dict(self, c: Call) -> dict:
         return {"kind": c.kind, "model": c.model, "input": c.input, "cached": c.cached, "output": c.output,
                 "reasoning": c.reasoning, "latency_s": round(c.latency_s, 3), "ok": c.ok,
                 "cost_usd": round(cost_of(c, self.meter.pricing), 6), "tools": c.tools}
+
+    def _pipe_name(self, name: str) -> str:
+        return self.vector if name == "vector_rag" else name
 
     def run_one(self, name: str, question: str, doc_id: str | None, emit) -> None:
         pipe = self.pipes.get(name)
@@ -128,7 +155,8 @@ class ChatDemo:
         pricing = self.meter.pricing
         try:
             with self.locks[name]:
-                with self.tracer.trace(f"{name}/{scope}", f"{name}/{scope}", [name, scope, "demo", "chat"],
+                pn = self._pipe_name(name)
+                with self.tracer.trace(f"{pn}/{scope}", f"{pn}/{scope}", [self._pipe_name(name), scope, "demo", "chat"],
                                        {"doc_id": doc_id or "", "source": "chat_demo"}, input=question) as span, \
                         self.meter.scope(f"demo:{name}") as s:
                     s.on_call = lambda c: emit({"type": "call", "pipeline": name, "call": self._call_dict(c),
@@ -277,11 +305,13 @@ def main() -> None:
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--fake", action="store_true", help="simulated pipelines, no API calls")
     ap.add_argument("--no-browser", action="store_true")
+    ap.add_argument("--vector", choices=list(VECTOR_LABELS), help="vector pipeline for the right-hand column")
     args = ap.parse_args()
-    demo = ChatDemo(load_config(), fake=args.fake)
+    demo = ChatDemo(load_config(), fake=args.fake, vector=args.vector)
     st = demo.status()
     for p, v in st["pipelines"].items():
-        print(f"  {p:10s} {'ready' if v['ready'] else 'NOT READY: ' + str(v['error'])}")
+        label = f"{p} ({st['vector']['label']})" if p == "vector_rag" else p
+        print(f"  {label:36s} {'ready' if v['ready'] else 'NOT READY: ' + str(v['error'])}")
     print(f"  documents indexed by both pipelines: {st['both_indexed']}")
     url = f"http://127.0.0.1:{args.port}"
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(demo))
