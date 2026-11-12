@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# PageIndex vs Vector RAG — clinical benchmark configuration
+# Every price is a config value: OpenAI pricing changed several times in 2026,
+# so check https://developers.openai.com/api/docs/pricing before your run.
+# ---------------------------------------------------------------------------
+
+run_name: clinical-bench
+seed: 42
+
+models:
+  pageindex_index: gpt-5.6-luna      # builds the tree (a basic model is enough per PageIndex docs)
+  chat: gpt-5.6-terra                # SAME answering model for both pipelines (fair comparison)
+  embedding: text-embedding-3-small  # vector pipeline only
+  qa_generator: gpt-5.6-terra        # writes benchmark questions (one-off, excluded from pipeline cost)
+  judge: gpt-5.6-sol                 # grades answers (excluded from pipeline cost)
+  reasoning_effort: medium           # passed to both pipelines' chat calls
+
+# USD per 1M tokens. cached = cached-input read price.
+pricing:
+  gpt-5.6-luna:  {input: 0.20, cached: 0.02, output: 1.20}
+  gpt-5.6-terra: {input: 2.00, cached: 0.20, output: 12.00}
+  gpt-5.6-sol:   {input: 5.00, cached: 0.50, output: 30.00}   # promo rate $4/$20 may apply until 2026-11-21
+  text-embedding-3-small: {input: 0.02, cached: 0.02, output: 0.0}
+  text-embedding-3-large: {input: 0.13, cached: 0.13, output: 0.0}
+
+# Corpus size presets. "large" is the default for the team demo.
+scale: large
+scales:
+  small:  {trials: 8,  labels: 25,  notes: 150,  q_per_trial: 4, q_per_label: 2, q_notes: 40}
+  medium: {trials: 20, labels: 80,  notes: 500,  q_per_trial: 4, q_per_label: 2, q_notes: 80}
+  large:  {trials: 40, labels: 150, notes: 1200, q_per_trial: 4, q_per_label: 2, q_notes: 120}
+
+data:
+  corpus_dir: corpus
+  trials_condition_terms: ["oncology", "diabetes", "heart failure", "Alzheimer", "rheumatoid arthritis"]
+  trial_min_pages: 40          # keep only long protocols (where structure matters)
+  label_min_chars: 40000       # keep only long FDA labels
+  synthea_dir: null            # set to a Synthea FHIR output dir to use real Synthea bundles
+
+vector_rag:
+  chunk_tokens: 512
+  chunk_overlap: 64
+  top_k: 8
+  embed_batch: 256
+
+pageindex:
+  mode: local                  # local | cloud  (cloud needs PAGEINDEX_API_KEY)
+  max_turns: 12
+  citations: true
+
+benchmark:
+  scopes: [document, corpus]   # document = question tells the system which doc; corpus = open search
+  concurrency: 1               # keep 1 for clean latency numbers
+  query_timeout_s: 180
+
+langfuse:
+  enabled: true                # needs LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY / LANGFUSE_BASE_URL (env or .env)
+  environment: benchmark       # measured runs; the modeled replay uses "modeled"

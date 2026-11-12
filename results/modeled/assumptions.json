@@ -1,0 +1,76 @@
+{
+ "tokens_per_page": 650,
+ "llm_ttft_s": 0.55,
+ "llm_tok_per_s": 110,
+ "reasoning_tokens_per_call": [
+  120,
+  420
+ ],
+ "answer_tokens": [
+  90,
+  260
+ ],
+ "vector_system_tokens": 300,
+ "vector_question_tokens": 40,
+ "vector_embed_call_s": [
+  0.12,
+  0.3
+ ],
+ "vector_search_s_per_10k_chunks": 0.003,
+ "pi_system_tokens": 1200,
+ "pi_tree_tokens_per_page": 12,
+ "pi_pages_read_per_turn": 2,
+ "pi_tool_call_tokens": 80,
+ "pi_cache_hit_share": 0.55,
+ "pi_doc_listing_tokens_per_doc": 40,
+ "pi_discovery_turns": [
+  1,
+  2
+ ],
+ "pi_index_usd_per_page": 0.0011,
+ "pi_index_fixed_s": 8.0,
+ "pi_index_s_per_page": 0.24,
+ "vec_parse_s_per_page": 0.015,
+ "vec_embed_s_per_batch": 0.35,
+ "embedding_dim": 1536,
+ "p_correct": {
+  "trial_protocol/lookup": [
+   0.8,
+   0.88
+  ],
+  "trial_protocol/multi_hop": [
+   0.52,
+   0.81
+  ],
+  "trial_protocol/section_ref": [
+   0.6,
+   0.9
+  ],
+  "fda_label/lookup": [
+   0.86,
+   0.88
+  ],
+  "fda_label/cross_ref": [
+   0.58,
+   0.84
+  ],
+  "clinical_note/patient": [
+   0.95,
+   0.96
+  ]
+ },
+ "corpus_scope_factor": {
+  "trial_protocol": [
+   0.85,
+   0.93
+  ],
+  "fda_label": [
+   0.88,
+   0.95
+  ],
+  "clinical_note": [
+   0.72,
+   0.8
+  ]
+ }
+}

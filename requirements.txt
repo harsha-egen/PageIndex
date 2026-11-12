@@ -1,0 +1,13 @@
+# Core
+pageindex>=0.4          # PageIndex SDK (local + cloud mode). pip install -U pageindex
+openai>=2.0
+tiktoken>=0.8
+pymupdf>=1.24           # PDF text + TOC extraction (pypdf is used as a fallback)
+pypdf>=4.0
+numpy>=1.26
+pandas>=2.0
+pyyaml>=6.0
+requests>=2.31
+reportlab>=4.0          # renders FDA labels / synthetic notes to PDF
+tqdm>=4.66
+langfuse>=3.0          # tracing + dashboards (SDK v3+ / OpenTelemetry)

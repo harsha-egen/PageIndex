@@ -1,0 +1,8 @@
+corpus/
+results/stores/
+results/*.jsonl
+.pageindex/
+__pycache__/
+.venv/
+*.bak
+.env
